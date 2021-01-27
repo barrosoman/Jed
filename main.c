@@ -3,6 +3,12 @@
 
 #define MAX_CHARS 600000
 
+typedef struct letra{
+    char ch;
+    struct letra *prox;
+    struct letra *prev;
+} letra;
+
 void initScreen();
 void endScreen();
 void writeLoop();
@@ -33,27 +39,24 @@ void endScreen() {
 void writeLoop() {
     int row, col;
     getyx(stdscr, row, col);
+    col ++;
     row ++;
 
-    char chars[MAX_CHARS];
-    char ch;
-    int i = 0;
     do {
-        ch = getch();
-        switch (ch) {
+        letter.ch = getch();
+        switch (letter.ch) {
             case 10:
                 wmove(stdscr, row, 0);
                 row ++;
-                chars[i] = '\n';
+                letter.ch = '\n';
                 break;
             case 'B':
-                chars[i] = '\0';
+                letter.ch = '\0';
                 export(chars);
             default:
-                chars[i] = ch;
+                letter.ch = ch;
                 break;
         }
-        i++;
     } while (ch != 'A');
     endScreen();
 }
