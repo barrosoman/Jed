@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <math.h>
+#include <math.h> // [M] Já tem math.h pq não usar log (isso vai fazer sentido mais pra frente)
 
 enum commands{
     INSERT  = 'i',
@@ -12,7 +12,7 @@ enum commands{
 };
 
 typedef struct linha {
-    char ch[8192];
+    char ch[8192]; // [M] nome mais descritivo, por favor
     size_t linhaSize;
 } Linha_t;
 
@@ -21,6 +21,8 @@ typedef struct texto {
     size_t totalLinhas;
 } Texto_t;
 Texto_t texto;
+
+// [M] Nit-pick: portunglês 😡
 
 void assignAllLinhas(FILE *arquivo);
 void editExistingFile(char *arquivo);
@@ -38,13 +40,13 @@ void deleteLinha(int linha);
 int main(int argc, char **argv)
 {
     switch (argc) {
-        case 1:
-            editLoop("\0");
+        case 1: // [M] O quê é essa opção?
+            editLoop("\0"); // [M] Essa string significa "NO_FILE"? Pq nn tacar isso numa constante global?
             break;
-        case 2:
+        case 2: // [M] O quê é essa opção?
             editExistingFile(argv[1]);
             break;
-        default:
+        default: // [M] O quê é essa(S) opção(ões)?
             explainProgram();
             break;
     }
@@ -64,6 +66,8 @@ void editExistingFile(char *nomeArquivo)
 
 void assignAllLinhas(FILE *arquivo)
 {
+    // [M] Não acho que esse nome explica o quê a função faz
+    // [M] Initialize? Clean? WHAT IS GOING ON IN HERE
     Linha_t *linha = texto.linhas;
     int i = texto.totalLinhas = 0;
     while ( fgets((linha+i)->ch, sizeof((linha+i)->ch), arquivo) ) {
@@ -74,6 +78,8 @@ void assignAllLinhas(FILE *arquivo)
 
 int printAllFile()
 {
+    // [M] 'All' implica múltiplos, use 'Entire' ou omita o adjetivo
+    // [M] Isso foi muito nit-pick, desculpa kkkkk
     Linha_t *linha = texto.linhas;
     int i = 0;
 
@@ -84,6 +90,7 @@ int printAllFile()
     return 0;
 }
 
+// [M] Comments aren't a good source control, source control is a good source control
 /* void getCommand(char **command) */
 /* { */
 /*     char buffer[256]; */
@@ -119,24 +126,29 @@ int explainProgram()
 
 void saveToFile(char *nomeArquivo)
 {
+    // [M] 'dumpToFile'? Sugestão, mas gostei do nome
+    
     FILE *arquivo = fopen(nomeArquivo, "w");
     for (int i = 0; i < texto.totalLinhas; i++) {
         fputs(texto.linhas[i].ch, arquivo);
     }
-    fclose(arquivo);
+    fclose(arquivo); // [M] Muito obrigado por dar open e close na mesma função kkkkk
 }
 
 int editLoop(char *nomeArquivo)
 {
+    // [M] Função bem grande, imagino que já tentou refatorar; se quiser ajuda só chamar
     char command;
     char buffer[256];
     char aux[256];
     int linha=0;
 
-    char *nomeArq = malloc(256);
+    char *nomeArq = malloc(256); // [M] Não vejo o free correspondente na função
     strcpy(nomeArq, nomeArquivo);
 
     while(1) {
+        
+        // [M] Excelente bloco pra tentar colocar em uma outra função
         strcpy(aux, "\0");
         printf("%ld\n", texto.totalLinhas);
         printf(": ");
@@ -144,6 +156,8 @@ int editLoop(char *nomeArquivo)
         system("clear");
         sscanf(buffer, " %c %s", &command, aux);
             sscanf(aux, "%d", &linha);
+        
+        // [M] Outra função aqui, perhaps?
         switch (command) {
             case INSERT:
                 /* comando 'i' */
@@ -169,7 +183,7 @@ int editLoop(char *nomeArquivo)
                 if(!strcmp(aux, "\0")){
                     if(!strcmp(nomeArq, "\0")) {
                         printf("Não há arquivo para salvar\n");
-                        break;
+                        break; // [M] Se isso fosse uma função poderiam ser 'return'
                     }
                     saveToFile(nomeArq);
                     break;
@@ -188,7 +202,7 @@ int editLoop(char *nomeArquivo)
 
 void insertLinha(int linha)
 {
-    int tL = texto.totalLinhas;
+    int tL = texto.totalLinhas; // [M] Vc faz essa variável mas não está usando onde poderia wtf
     if (linha > (texto.totalLinhas + 1)) {
         for (int i = 0; i <= linha - tL - 1; i++) {
             strcpy(texto.linhas[tL+i].ch, "\n");
@@ -208,8 +222,9 @@ void printLinha(int linha, char *string)
 
 int getIndent()
 {
+    // [M] Isso aqui poderia ser um log base 10 + 1 (but I like it this way)
     int indent=0, totalLinhas;
-    totalLinhas = texto.totalLinhas;
+    totalLinhas = texto.totalLinhas; // [M] pq não deixar a inicialização inline?
     while (totalLinhas != 0) {
         totalLinhas = totalLinhas/10;
         indent++;
@@ -223,7 +238,7 @@ void deleteLinha(int linha)
         return;
     }
     for (int i=linha-1; i < texto.totalLinhas; i++) {
-        strcpy(texto.linhas[i].ch, texto.linhas[i+1].ch);
+        strcpy(texto.linhas[i].ch, texto.linhas[i+1].ch); // [M] OOF numa lista circular não ia precisar
     }
     strcpy(texto.linhas[texto.totalLinhas-1].ch, "\0");
     texto.totalLinhas--;
