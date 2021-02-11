@@ -3,45 +3,51 @@
 #include <stdlib.h>
 #include <math.h> // [M] Já tem math.h pq não usar log (isso vai fazer sentido mais pra frente)
 
+#define NO_FILE ""
+
 enum commands{
     INSERT  = 'i',
     DELETE  = 'd',
     QUIT    = 'q',
     SAVE    = 'w',
     PRINT   = 'p',
+    LOCATE  = 'f',
+    SUBSTITUTE  = 's',
 };
 
-typedef struct linha {
-    char ch[8192]; // [M] nome mais descritivo, por favor
-    size_t linhaSize;
-} Linha_t;
+typedef struct line {
+    char string[8192];
+    size_t lineSize;
+} Line_t;
 
-typedef struct texto {
-    Linha_t linhas[8192];
-    size_t totalLinhas;
+typedef struct text {
+    Line_t lines[8192];
+    size_t totalLines;
 } Texto_t;
-Texto_t texto;
+Texto_t text;
 
-// [M] Nit-pick: portunglês 😡
-
-void assignAllLinhas(FILE *arquivo);
+void loadFileToMemory(FILE *arquivo);
 void editExistingFile(char *arquivo);
-void getCommand(char **command);
 void saveToFile(char *nomeArquivo);
+void orgAuxForSubs(char *aux);
+void substituteWord(int line, char *from, char *to);
 
+int locateWord(char *str, char *word);
 int editLoop(char *nomeArquivo);
 int explainProgram();
-int printAllFile();
+int printEntireFile();
 int getIndent();
-void insertLinha(int linha);
-void printLinha(int linha, char *string);
-void deleteLinha(int linha);
+
+// [TODO] MUDAR (int line) para algo mais intendível, typedef LineINdex por exemplo.
+void insertLine(int line);
+void printLine(int line);
+void deleteLine(int line);
 
 int main(int argc, char **argv)
 {
     switch (argc) {
         case 1: // [M] O quê é essa opção?
-            editLoop("\0"); // [M] Essa string significa "NO_FILE"? Pq nn tacar isso numa constante global?
+            editLoop(NO_FILE);
             break;
         case 2: // [M] O quê é essa opção?
             editExistingFile(argv[1]);
@@ -57,69 +63,40 @@ void editExistingFile(char *nomeArquivo)
 {
     FILE *arquivo = fopen(nomeArquivo, "r");
 
-
-    assignAllLinhas(arquivo);
+    loadFileToMemory(arquivo);
     fclose(arquivo);
 
     editLoop(nomeArquivo);
 }
 
-void assignAllLinhas(FILE *arquivo)
+void loadFileToMemory(FILE *arquivo)
 {
-    // [M] Não acho que esse nome explica o quê a função faz
-    // [M] Initialize? Clean? WHAT IS GOING ON IN HERE
-    Linha_t *linha = texto.linhas;
-    int i = texto.totalLinhas = 0;
-    while ( fgets((linha+i)->ch, sizeof((linha+i)->ch), arquivo) ) {
+    Line_t *line = text.lines;
+    int i = text.totalLines = 0;
+    while ( fgets((line+i)->string, sizeof((line+i)->string), arquivo) ) {
         i++;
     }
-    texto.totalLinhas = i;
+    text.totalLines = i;
 }
 
-int printAllFile()
+int printEntireFile()
 {
-    // [M] 'All' implica múltiplos, use 'Entire' ou omita o adjetivo
-    // [M] Isso foi muito nit-pick, desculpa kkkkk
-    Linha_t *linha = texto.linhas;
+    Line_t *line = text.lines;
     int i = 0;
 
-    while ( strcmp( (linha+i)->ch, "\0" ) ) {
-        printLinha(i+1, (linha+i)->ch);
+    while ( strcmp( (line+i)->string, "\0" ) ) {
+        printLine(i);
         i++;
     }
     return 0;
 }
 
-// [M] Comments aren't a good source control, source control is a good source control
-/* void getCommand(char **command) */
-/* { */
-/*     char buffer[256]; */
-/*     int j=0, ctr=0; */
-
-/*     fgets(buffer, sizeof(buffer), stdin); */
-/*     for(int i=0;i<=(strlen(buffer));i++) */
-/*     { */
-/*         // if space or NULL found, assign NULL into newString[ctr] */
-/*         if(buffer[i]==' '||buffer[i]=='\0') */
-/*         { */
-/*             command[ctr][j]='\0'; */
-/*             ctr++;  //for next word */
-/*             j=0;    //for next word, init index to 0 */
-/*         } */
-/*         else */
-/*         { */
-/*             command[ctr][j]=buffer[i]; */
-/*             j++; */
-/*         } */
-/*     } */
-/* } */
-
 int explainProgram()
 {
     printf("\
             \nO programa funciona do seguinte jeito:\
-            \n\t\t./jed \"arquivo\"\t-> edição de um arquivo de texto.\
-            \n\t\t./jed\t\t-> começa a escrever um texto na memória\
+            \n\t\t./jed \"arquivo\"\t-> edição de um arquivo de text.\
+            \n\t\t./jed\t\t-> começa a escrever um text na memória\
             \n\n");
     return 0;
 }
@@ -127,72 +104,87 @@ int explainProgram()
 void saveToFile(char *nomeArquivo)
 {
     // [M] 'dumpToFile'? Sugestão, mas gostei do nome
-    
     FILE *arquivo = fopen(nomeArquivo, "w");
-    for (int i = 0; i < texto.totalLinhas; i++) {
-        fputs(texto.linhas[i].ch, arquivo);
+    for (int i = 0; i < text.totalLines; i++) {
+        fputs(text.lines[i].string, arquivo);
     }
-    fclose(arquivo); // [M] Muito obrigado por dar open e close na mesma função kkkkk
+    fclose(arquivo);
 }
 
-int editLoop(char *nomeArquivo)
+int editLoop(char *nomeArquivo) // [TODO] MAYBE PUT ARRAY[256]
 {
-    // [M] Função bem grande, imagino que já tentou refatorar; se quiser ajuda só chamar
     char command;
     char buffer[256];
     char aux[256];
-    int linha=0;
+    int line=0;
 
-    char *nomeArq = malloc(256); // [M] Não vejo o free correspondente na função
+    char *nomeArq = malloc(256); // [TODO] WHY MALLOC?
     strcpy(nomeArq, nomeArquivo);
+    int index;
 
     while(1) {
-        
+
         // [M] Excelente bloco pra tentar colocar em uma outra função
         strcpy(aux, "\0");
-        printf("%ld\n", texto.totalLinhas);
         printf(": ");
         fgets(buffer, sizeof(buffer), stdin);
         system("clear");
-        sscanf(buffer, " %c %s", &command, aux);
-            sscanf(aux, "%d", &linha);
-        
+        sscanf(buffer, " %c %[^\n]s", &command, aux);
+        sscanf(aux, "%d", &line);
+
         // [M] Outra função aqui, perhaps?
         switch (command) {
             case INSERT:
                 /* comando 'i' */
-                insertLinha(linha);
+                insertLine(line);
                 break;
             case DELETE:
                 /* comando 'd' */
-                sscanf(aux, "%d", &linha);
-                deleteLinha(linha);
+                sscanf(aux, "%d", &line);
+                deleteLine(line);
                 break;
             case PRINT:
                 /* comando 'p' */
                 if (!strcmp(aux, "%")){
-                    printAllFile();
+                    printEntireFile();
                     break;
                 }
-                sscanf(aux, "%d", &linha);
+                sscanf(aux, "%d", &line);
 
-                printLinha(linha, texto.linhas[linha-1].ch);
+                printLine(line-1);
                 break;
             case SAVE:
                 /* comando 'w' */
-                if(!strcmp(aux, "\0")){
-                    if(!strcmp(nomeArq, "\0")) {
+                // [TODO] BOTAR NUMA FUNCAO PORRA
+
+                if(!strcmp(aux, NO_FILE)){
+                    if(!strcmp(nomeArq, NO_FILE)) {
                         printf("Não há arquivo para salvar\n");
                         break; // [M] Se isso fosse uma função poderiam ser 'return'
                     }
                     saveToFile(nomeArq);
                     break;
                 }
-                saveToFile(aux);
+                strcpy(nomeArq, aux);
+                strcpy(nomeArquivo, aux);
+                saveToFile(nomeArq);
                 break;
             case QUIT:
                 /* comando 'q' */
+                free(nomeArq);
                 return 0;
+            case LOCATE:
+                for (int i = 0; i < text.totalLines; i++) {
+                    index = locateWord(text.lines[i].string, aux);
+                    if (index != -1) {
+                        printLine(i);
+                    }
+                }
+                break;
+            case SUBSTITUTE:
+                /* printf("%s\n", aux); */
+                orgAuxForSubs(aux);
+                break;
             default:
                 printf("Comando inválido\n");
                 break;
@@ -200,46 +192,111 @@ int editLoop(char *nomeArquivo)
     }
 }
 
-void insertLinha(int linha)
-{
-    int tL = texto.totalLinhas; // [M] Vc faz essa variável mas não está usando onde poderia wtf
-    if (linha > (texto.totalLinhas + 1)) {
-        for (int i = 0; i <= linha - tL - 1; i++) {
-            strcpy(texto.linhas[tL+i].ch, "\n");
-            texto.totalLinhas++;
+void insertLine(int line) {
+    int tL = text.totalLines;
+    if (line > (text.totalLines + 1)) {
+        for (int i = 0; i <= line - tL - 1; i++) {
+            strcpy(text.lines[tL+i].string, "\n");
+            text.totalLines++;
         }
-    } else if (linha == texto.totalLinhas + 1) {
-        texto.totalLinhas++;
+    } else if (line == text.totalLines + 1) {
+        text.totalLines++;
     }
-    fgets(texto.linhas[linha-1].ch, sizeof(texto.linhas[linha-1].ch), stdin);
+    fgets(text.lines[line-1].string, sizeof(text.lines[line-1].string), stdin);
 }
 
-void printLinha(int linha, char *string)
+void printLine(int line)
 {
     int indent=getIndent();
-    printf("%*d| %s", indent, linha, string);
+    printf("%*d| %s", indent, line+1, text.lines[line].string);
 }
 
 int getIndent()
 {
     // [M] Isso aqui poderia ser um log base 10 + 1 (but I like it this way)
-    int indent=0, totalLinhas;
-    totalLinhas = texto.totalLinhas; // [M] pq não deixar a inicialização inline?
-    while (totalLinhas != 0) {
-        totalLinhas = totalLinhas/10;
+    int indent=0,
+        totalLines = text.totalLines;
+
+    while (totalLines != 0) {
+        totalLines = totalLines/10;
         indent++;
     }
     return indent;
 }
 
-void deleteLinha(int linha)
+void deleteLine(int line)
 {
-    if (linha > texto.totalLinhas) {
+    if (line > text.totalLines) {
         return;
     }
-    for (int i=linha-1; i < texto.totalLinhas; i++) {
-        strcpy(texto.linhas[i].ch, texto.linhas[i+1].ch); // [M] OOF numa lista circular não ia precisar
+    for (int i=line-1; i < text.totalLines; i++) {
+        strcpy(text.lines[i].string, text.lines[i+1].string);
     }
-    strcpy(texto.linhas[texto.totalLinhas-1].ch, "\0");
-    texto.totalLinhas--;
+    strcpy(text.lines[text.totalLines-1].string, "\0");
+    text.totalLines--;
+}
+
+int locateWord(char *str, char *word)
+{
+    int strLen=strlen(str),
+           wordLen=strlen(word),
+           found;
+
+    for(int i=0; i<strLen - wordLen; i++) {
+        found = 1;
+        for(int j=0; j<wordLen; j++) {
+            if(str[i + j] != word[j]) {
+                found = 0;
+                break;
+            }
+        }
+        if(found == 1) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void orgAuxForSubs(char *aux) {
+    char line[8], from[8192], to[8192];
+    int index = 0;
+
+    sscanf(aux, "%s %s %s", line, from, to);
+    printf("\n--%s--\n--%s--\n--%s--\n", line, from, to);
+    if (strcmp(line,"%") == 0) {
+        for (int i = 0; i < text.totalLines; i++) {
+            index = -1;
+            if (strcmp(text.lines[i].string, from) > 0)
+            index = locateWord(text.lines[i].string, from);
+            if (index != -1 ) {
+                substituteWord(i, from, to);
+            }
+        }
+        return;
+    }
+
+    substituteWord(atoi(line) - 1, from, to);
+}
+
+void substituteWord(int line, char *from, char *to) {
+    char before[8192],
+         after[8192],
+         *string;
+    int indexWord, strLen, wordLen;
+
+    string = text.lines[line].string;
+    strLen = strlen(string);
+    wordLen = strlen(from);
+
+    indexWord = locateWord(string, from);
+
+    strncpy(before, string, indexWord);
+    for (int i = (indexWord + wordLen), j = 0;
+            i < strLen;
+            i++, j++) {
+        after[j] = string[i];
+    }
+    strcpy(string, before);
+    strcat(string, to);
+    strcat(string, after);
 }
