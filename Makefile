@@ -1,8 +1,7 @@
-flags = -lncurses
 all:
-	cc -o jet *.c $(flags)
+	cc -o jed *.c $(flags)
 test:
-	cc -o jet *.c $(flags) && ./jet
+	cc -o jed *.c $(flags) && ./jed
 
 clean:
-	rm jet
+	rm jed
