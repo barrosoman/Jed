@@ -33,7 +33,7 @@ Texto_t text;
 void loadFileToMemory(FILE *arquivo);
 void editExistingFile(char *arquivo);
 void saveToFile(char *nomeArquivo);
-void orgAuxForSubs(char *aux);
+void organizeAuxForSubstitution(char *aux);
 void editLoop(char *nomeArquivo);
 void substituteFirstWordOcurrence(Index line, char *from, char *to);
 void insertLine(Index line);
@@ -158,7 +158,7 @@ int doCommand(char command, char *aux, char *nomeArq, Index line) {
             break;
         /* comando 's' */
         case SUBSTITUTE:
-            orgAuxForSubs(aux);
+            organizeAuxForSubstitution(aux);
             break;
         /* comando 'q' */
         case QUIT:
@@ -206,6 +206,7 @@ void insertLine(Index line) {
     }
     fgets(text.lines[line-1].string, sizeof(text.lines[line-1].string), stdin);
 }
+
 /****** PRINT COMMAND ******/
 void printCmd(char *aux, Index line) {
     if (!strcmp(aux, "%")){
@@ -240,7 +241,7 @@ int getIndent() {
 }
 
 /****** SUBSTITUTE COMMAND ******/
-void orgAuxForSubs(char *aux) {
+void organizeAuxForSubstitution(char *aux) {
     char index_buffer [8], from [8192], to [8192];
 
     sscanf(aux, "%s %s %s", index_buffer, from, to);
@@ -261,20 +262,29 @@ void orgAuxForSubs(char *aux) {
 }
 
 void substituteFirstWordOcurrence(Index line, char *from, char *to) {
-    char before_word [8192] = {}, after [8192] = {};
+    char before_word[8192] = {}, after_word[8192] = {};
 
     int word_pos = locateWord(text.lines[line].string, from);
 
+    /* before_word = texto antes do padrao que quer substituir */
     strncpy(before_word, text.lines[line].string, word_pos);
+    /* after_word = texto após o padrão que quer substituir */
+    strcpy(after_word, &text.lines[line].string[word_pos + strlen(from)]);
 
-    // Test this shit
-    strcpy(after, &text.lines[line].string[word_pos + strlen(from)]);
-
-    // Test this shit
-    sprintf(text.lines[line].string, "%s%s%s", before_word, to, after);
+    /* reescreve a linha com o padrão substituido */
+    sprintf(text.lines[line].string, "%s%s%s", before_word, to, after_word);
 }
 
 /****** LOCATE COMMAND ******/
+void locateCmd(char *aux, Index line) {
+    for (int i = 0; i < text.totalLines; i++) {
+        line = locateWord(text.lines[i].string, aux);
+        if (line != -1) {
+            printLine(i);
+        }
+    }
+}
+
 int locateWord(char *str, char *word) {
     int strLen=strlen(str),
            wordLen=strlen(word),
@@ -293,15 +303,6 @@ int locateWord(char *str, char *word) {
         }
     }
     return -1;
-}
-
-void locateCmd(char *aux, Index line) {
-    for (int i = 0; i < text.totalLines; i++) {
-        line = locateWord(text.lines[i].string, aux);
-        if (line != -1) {
-            printLine(i);
-        }
-    }
 }
 
 /****** DELETE COMMAND ******/
