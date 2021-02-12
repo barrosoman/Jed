@@ -5,7 +5,7 @@
 /* DEFINITIONS FOR BETTER CODE READABILITY */
 #define NO_FILE ""
 #define NOT_FOUND -1
-typedef int Index;
+typedef unsigned Index;
 
 enum commands{
     INSERT      = 'i',
@@ -49,6 +49,7 @@ int explainProgram();
 int printEntireFile();
 int getIndent();
 int locateWord(char *str, char *word);
+int isEqual(char *string1, char *string2);
 
 /************ MAIN FUNCTION ************/
 int main(int argc, char **argv) {
@@ -57,11 +58,14 @@ int main(int argc, char **argv) {
 }
 
 /************ INIT FUNCTIONS ************/
+/* Decide o que fazer a partir da quantidade de parametros do programa */
 void determineAction(int qtdArguments, char **arguments) {
     switch (qtdArguments) {
+        /* ./jed */
         case 1:
             editLoop(NO_FILE);
             break;
+        /* ./jed arquivo.txt */
         case 2:
             editExistingFile(arguments[1]);
             break;
@@ -71,6 +75,7 @@ void determineAction(int qtdArguments, char **arguments) {
     }
 }
 
+/* Explica para o usuário como usar o programa */
 int explainProgram() {
     printf("\
             \nO programa funciona do seguinte jeito:\
@@ -81,9 +86,11 @@ int explainProgram() {
 }
 
 /************ READ FILE FUNCTIONS ************/
+/* Abre o arquivo para leitura para obtenção das linhas */
 void editExistingFile(char *nomeArquivo) {
     FILE *arquivo = fopen(nomeArquivo, "r");
 
+    /* Se o arquivo não existir, crie-o */
     if (arquivo == NULL) {
         arquivo = fopen(nomeArquivo, "w");
         fclose(arquivo);
@@ -96,33 +103,36 @@ void editExistingFile(char *nomeArquivo) {
     editLoop(nomeArquivo);
 }
 
+/* Insere as linhas do texto na memória para edição */
 void loadFileToMemory(FILE *arquivo) {
     Line_t *line = text.lines;
     int i = text.totalLines = 0;
-    while ( fgets((line+i)->string, sizeof((line+i)->string), arquivo) ) {
+    while (fgets((line+i)->string, sizeof((line+i)->string), arquivo)) {
         i++;
     }
     text.totalLines = i;
 }
 
 /************ MENU FUNCTIONS ************/
+/* Função genérica para edição de um arquivo */
 void editLoop(char *nomeArquivo) {
     char command = '\0',
          aux[8192] = {},
          nomeArq[512] = {};
-    int line=0;
+    Index line=0;
 
     strcpy(nomeArq, nomeArquivo);
 
     while(1) {
         orgInput(&command, aux, &line);
-
         if (doCommand(command, aux, nomeArq, line) == 1) {
             return;
         }
     }
 }
 
+/* Organiza a entrada do usuário e divide em informações
+   úteis (comando, linha de execução do comando e parametros) */
 void orgInput(char *command, char *aux, Index *line) {
     char buffer[8192] = {};
 
@@ -133,7 +143,7 @@ void orgInput(char *command, char *aux, Index *line) {
     sscanf(aux, "%d", line);
 }
 
-
+/* Decide que ação fazer a partir do que o usuário escreveu */
 int doCommand(char command, char *aux, char *nomeArq, Index line) {
     switch (command) {
         /* comando 'i' */
@@ -172,9 +182,10 @@ int doCommand(char command, char *aux, char *nomeArq, Index line) {
 
 /************ COMMANDS ************/
 /****** SAVE COMMAND ******/
+/* Função base para o comando de salvar o texto */
 void saveCmd(char *aux, char *nomeArq) {
-    if(!strcmp(aux, NO_FILE)){
-        if(!strcmp(nomeArq, NO_FILE)) {
+    if(isEqual(aux, NO_FILE)) {
+        if(isEqual(nomeArq, NO_FILE)) {
             printf("Não há arquivo para salvar\n");
             return;
         }
@@ -185,6 +196,7 @@ void saveCmd(char *aux, char *nomeArq) {
     saveToFile(nomeArq);
 }
 
+/* Insere as linhas do texto no arquivo */
 void saveToFile(char *nomeArquivo) {
     FILE *arquivo = fopen(nomeArquivo, "w");
     for (int i = 0; i < text.totalLines; i++) {
@@ -194,6 +206,7 @@ void saveToFile(char *nomeArquivo) {
 }
 
 /****** INSERT COMMAND ******/
+/* Pega informação do usuário e insere em uma linha do texto */
 void insertLine(Index line) {
     int tL = text.totalLines;
     if (line > (text.totalLines + 1)) {
@@ -208,27 +221,32 @@ void insertLine(Index line) {
 }
 
 /****** PRINT COMMAND ******/
+/* Função base para o comando de impressão de linha,
+   decide se imprime uma ou todas linhas */
 void printCmd(char *aux, Index line) {
-    if (!strcmp(aux, "%")){
+    if (isEqual(aux, "%")){
         printEntireFile();
         return;
     }
     printLine(line-1);
 }
 
+/* Roda um loop para imprimir cada linha */
 int printEntireFile() {
-    /* while ( strcmp( (line+i)->string, "\0" ) ) { */
     for (int i = 0; i < text.totalLines; i++) {
         printLine(i);
     }
     return 0;
 }
 
+/* Imprime uma linha para o stdout */
 void printLine(Index line) {
     int indent=getIndent();
     printf("%*d| %s", indent, line+1, text.lines[line].string);
 }
 
+/* Calcula quantos espaços dar para a numeração da linha ficar corretamente
+   indentada */
 int getIndent() {
     int indent=0,
         totalLines = text.totalLines;
@@ -241,19 +259,19 @@ int getIndent() {
 }
 
 /****** SUBSTITUTE COMMAND ******/
+/* Função base do comando substituir
+   Substitui em uma linha ou em todo o texto */
 void organizeAuxForSubstitution(char *aux) {
     char index_buffer [8], from [8192], to [8192];
 
     sscanf(aux, "%s %s %s", index_buffer, from, to);
 
-    if (strcmp(index_buffer, "%") != 0)
-    {
+    if (isEqual(index_buffer, "%") == 0) {
         substituteFirstWordOcurrence(atoi(index_buffer) - 1, from, to);
         return;
     }
 
-    for (int i = 0; i < text.totalLines; i++)
-    {
+    for (int i = 0; i < text.totalLines; i++) {
         if (locateWord(text.lines[i].string, from) == NOT_FOUND)
             continue;
 
@@ -261,6 +279,7 @@ void organizeAuxForSubstitution(char *aux) {
     }
 }
 
+/* Substitui o primeiro padrao de uma linha por outra coisa */
 void substituteFirstWordOcurrence(Index line, char *from, char *to) {
     char before_word[8192] = {}, after_word[8192] = {};
 
@@ -268,6 +287,7 @@ void substituteFirstWordOcurrence(Index line, char *from, char *to) {
 
     /* before_word = texto antes do padrao que quer substituir */
     strncpy(before_word, text.lines[line].string, word_pos);
+
     /* after_word = texto após o padrão que quer substituir */
     strcpy(after_word, &text.lines[line].string[word_pos + strlen(from)]);
 
@@ -276,15 +296,20 @@ void substituteFirstWordOcurrence(Index line, char *from, char *to) {
 }
 
 /****** LOCATE COMMAND ******/
+/* Função base para o comando de localizar */
 void locateCmd(char *aux, Index line) {
+    int totalPatterns = 0;
     for (int i = 0; i < text.totalLines; i++) {
         line = locateWord(text.lines[i].string, aux);
         if (line != -1) {
             printLine(i);
+            totalPatterns++;
         }
     }
+    printf("%d\n", totalPatterns);
 }
 
+/* Localiza o início de uma palavra em uma string */
 int locateWord(char *str, char *word) {
     int strLen=strlen(str),
            wordLen=strlen(word),
@@ -306,6 +331,7 @@ int locateWord(char *str, char *word) {
 }
 
 /****** DELETE COMMAND ******/
+/* Deleta uma linha */
 void deleteLine(Index line) {
     if (line > text.totalLines) {
         return;
@@ -315,4 +341,12 @@ void deleteLine(Index line) {
     }
     strcpy(text.lines[text.totalLines-1].string, "\0");
     text.totalLines--;
+}
+
+/* Verifica se duas strings são iguais */
+int isEqual(char *string1, char *string2) {
+    if (strcmp(string1, string2) == 0) {
+        return 1;
+    }
+    return 0;
 }
